@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34728.123
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ResxTranslator", "ResxTranslator\ResxTranslator.csproj", "{197B530E-98FF-4A95-8B6C-7C6168F702F3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{197B530E-98FF-4A95-8B6C-7C6168F702F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{197B530E-98FF-4A95-8B6C-7C6168F702F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{197B530E-98FF-4A95-8B6C-7C6168F702F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{197B530E-98FF-4A95-8B6C-7C6168F702F3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C4E5117F-0CCE-48C7-A14E-420D31A1A403}
+	EndGlobalSection
+EndGlobal
