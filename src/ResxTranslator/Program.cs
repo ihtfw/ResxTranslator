@@ -1,9 +1,12 @@
-﻿using Cocona;
+﻿using System.Text.RegularExpressions;
+using Cocona;
 using ResxTranslator;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+var builder = CoconaApp.CreateBuilder();
+var app = builder.Build();
 
-CoconaApp.Run(async (string dir, string to, string? from = null, bool overwrite = false, string? apiKey = null) =>
+app.AddCommand(async (string dir, string? to = null, string? from = null, bool overwrite = false, string? apiKey = null) =>
 {
     if (string.IsNullOrWhiteSpace(apiKey))
     {
@@ -21,31 +24,24 @@ CoconaApp.Run(async (string dir, string to, string? from = null, bool overwrite 
         return 1;
     }
 
-    var files = Directory.GetFiles(dir, "*.resx", SearchOption.AllDirectories);
-    if (files.Length == 0)
+    var allFiles = Directory.GetFiles(dir, "*.resx", SearchOption.AllDirectories);
+    if (allFiles.Length == 0)
     {
         Console.WriteLine($"No .resx files found in '{dir}'.");
         return 1;
     }
 
-    var toFilePostFix = $".{to}.resx";
-    var toFilePath = files.FirstOrDefault(f => f.EndsWith(toFilePostFix));
-    if (string.IsNullOrWhiteSpace(toFilePath))
-    {
-        Console.WriteLine($"No .resx file found for '{to}'.");
-        return 1;
-    }
 
     string? fromFilePath;
     if (string.IsNullOrWhiteSpace(from))
     {
-        var toFileName = Path.GetFileName(toFilePath);
-        var defaultFileName = toFileName.Substring(0, toFileName.Length - toFilePostFix.Length) + ".resx";
-        fromFilePath = files.FirstOrDefault(x => Path.GetFileName(x) == defaultFileName);
+        // Find the default .resx file
+        var regex = new Regex(@"^[a-zA-Z_]+\.resx$");
+        fromFilePath = allFiles.FirstOrDefault(x => regex.IsMatch(Path.GetFileName(x)));
     }
     else
     {
-        fromFilePath = files.FirstOrDefault(f => f.EndsWith($".{from}.resx"));
+        fromFilePath = allFiles.FirstOrDefault(f => f.EndsWith($".{from}.resx"));
     }
 
     if (string.IsNullOrWhiteSpace(fromFilePath))
@@ -54,78 +50,126 @@ CoconaApp.Run(async (string dir, string to, string? from = null, bool overwrite 
         return 1;
     }
 
-
-    var fromData = ResxIO.Read(fromFilePath);
-    var toData = ResxIO.Read(toFilePath);
-    var toTranslate = new Dictionary<string, string>();
-
-    foreach (var key in fromData.Keys)
+    var toFiles = new List<string>();
+    if (string.IsNullOrWhiteSpace(to))
     {
-        var shouldTranslate = false;
-        if (!toData.TryGetValue(key, out var toValue))
+        toFiles = allFiles.Where(f => f != fromFilePath).ToList();
+    }
+    else
+    {
+        var toFilePostFix = $".{to}.resx";
+        var toFilePath = allFiles.FirstOrDefault(f => f.EndsWith(toFilePostFix));
+        if (string.IsNullOrWhiteSpace(toFilePath))
         {
-            shouldTranslate = true;
+            Console.WriteLine($"No .resx file found for '{to}'.");
+            return 1;
         }
-        else
+
+        toFiles.Add(toFilePath);
+    }
+
+    Console.WriteLine($"Number of files to translate: " + toFiles.Count);
+
+    foreach (var toFile in toFiles)
+    {
+        Console.WriteLine($"Translating: " + toFile);
+
+        var fromData = ResxIO.Read(fromFilePath);
+        var toData = ResxIO.Read(toFile);
+        var toTranslate = new Dictionary<string, string>();
+
+        foreach (var key in fromData.Keys)
         {
-            if (overwrite || string.IsNullOrWhiteSpace(toValue))
+            var shouldTranslate = false;
+            if (!toData.TryGetValue(key, out var toValue))
             {
                 shouldTranslate = true;
             }
-        }
-
-        if (!shouldTranslate)
-        {
-            continue;
-        }
-
-        var fromValue = fromData[key];
-        toTranslate[key] = fromValue;
-    }
-
-    if (toTranslate.Count == 0)
-    {
-        Console.WriteLine("No translation required.");
-        return 0;
-    }
-
-    var translator = new Translator(apiKey);
-
-    var count = 0;
-    var total = toTranslate.Count;
-
-    var translated = new Dictionary<string, string>();
-    foreach (var (key, value) in toTranslate)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            translated[key] = value;
-            continue;
-        }
-
-        try
-        {
-            var translatedValue = await translator.TranslateAsync(from, to, value);
-            translated[key] = translatedValue;
-            count++;
-            Console.WriteLine($"Translated {count}/{total}: {value} => {translatedValue}");
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Failed to translate: {value}. Reason: " + e.Message);
-
-            if (translated.Any())
+            else
             {
-                Console.WriteLine($"Saving available translations. Count: {translated.Count}. Expected: {toTranslate.Count}");
-                ResxIO.Write(toFilePath, translated);
-                return 2;
+                if (overwrite || string.IsNullOrWhiteSpace(toValue))
+                {
+                    shouldTranslate = true;
+                }
             }
 
-            Console.WriteLine("No translations available. Exiting.");
-            return 2;
+            if (!shouldTranslate)
+            {
+                continue;
+            }
+
+            var fromValue = fromData[key];
+            toTranslate[key] = fromValue;
         }
+
+        if (toTranslate.Count == 0)
+        {
+            Console.WriteLine("No translation required for " + toFile);
+            continue;
+        }
+
+        var translator = new Translator(apiKey);
+
+        var count = 0;
+        var total = toTranslate.Count;
+
+        var translated = new Dictionary<string, string>();
+        foreach (var (key, value) in toTranslate)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                translated[key] = value;
+                continue;
+            }
+
+            try
+            {
+                if (string.IsNullOrEmpty(from))
+                {
+                    // assume default language as english
+                    from = "en";
+                }
+
+                string? toCode;
+                var codeRegex = new Regex(@"^[a-zA-Z_]+\.(?'code'[a-zA-Z]{2})\.resx$");
+                var fileName = Path.GetFileName(toFile);
+                var match = codeRegex.Match(fileName);
+                if (match.Success)
+                {
+                    toCode = match.Groups["code"].Value;
+                }
+                else
+                {
+                    Console.WriteLine($"Could not determine language code from file name: {fileName}");
+                    continue;
+                }
+
+                var translatedValue = await translator.TranslateAsync(from, toCode, value);
+                translated[key] = translatedValue;
+                count++;
+                Console.WriteLine($"Translated {count}/{total} {from} => {toCode}:\n{value} =>\n{translatedValue}");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Failed to translate: {value}. Reason: " + e.Message);
+
+                if (translated.Any())
+                {
+                    Console.WriteLine($"Saving available translations. Count: {translated.Count}. Expected: {toTranslate.Count}");
+                    ResxIO.Write(toFile, translated);
+                    return 2;
+                }
+
+                Console.WriteLine("No translations available. Exiting.");
+                return 2;
+            }
+        }
+
+        ResxIO.Write(toFile, translated);
     }
 
-    ResxIO.Write(toFilePath, translated);
+    Console.WriteLine("Done.");
     return 0;
 });
+
+app.Run();
