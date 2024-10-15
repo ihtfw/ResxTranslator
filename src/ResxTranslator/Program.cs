@@ -3,7 +3,7 @@ using ResxTranslator;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-CoconaApp.Run(async (string dir, string from, string to, bool overwrite = false, string? apiKey = null) =>
+CoconaApp.Run(async (string dir, string to, string? from = null, bool overwrite = false, string? apiKey = null) =>
 {
     if (string.IsNullOrWhiteSpace(apiKey))
     {
@@ -28,20 +28,32 @@ CoconaApp.Run(async (string dir, string from, string to, bool overwrite = false,
         return 1;
     }
 
-    var fromFilePath = files.FirstOrDefault(f => f.EndsWith($".{from}.resx"));
-    var toFilePath = files.FirstOrDefault(f => f.EndsWith($".{to}.resx"));
-
-    if (string.IsNullOrWhiteSpace(fromFilePath))
-    {
-        Console.WriteLine($"No .resx file found for '{from}'.");
-        return 1;
-    }
-
+    var toFilePostFix = $".{to}.resx";
+    var toFilePath = files.FirstOrDefault(f => f.EndsWith(toFilePostFix));
     if (string.IsNullOrWhiteSpace(toFilePath))
     {
         Console.WriteLine($"No .resx file found for '{to}'.");
         return 1;
     }
+
+    string? fromFilePath;
+    if (string.IsNullOrWhiteSpace(from))
+    {
+        var toFileName = Path.GetFileName(toFilePath);
+        var defaultFileName = toFileName.Substring(0, toFileName.Length - toFilePostFix.Length) + ".resx";
+        fromFilePath = files.FirstOrDefault(x => Path.GetFileName(x) == defaultFileName);
+    }
+    else
+    {
+        fromFilePath = files.FirstOrDefault(f => f.EndsWith($".{from}.resx"));
+    }
+
+    if (string.IsNullOrWhiteSpace(fromFilePath))
+    {
+        Console.WriteLine($"No .resx file found for '{from ?? "Default"}'.");
+        return 1;
+    }
+
 
     var fromData = ResxIO.Read(fromFilePath);
     var toData = ResxIO.Read(toFilePath);
